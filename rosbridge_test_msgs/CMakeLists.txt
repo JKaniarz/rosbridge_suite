@@ -20,6 +20,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   msg/TestUInt8FixedSizeArray16.msg
   msg/TestFloat32Array.msg
   msg/TestFloat32BoundedArray.msg
+  msg/TestNestedBoundedArray.msg
   srv/AddTwoInts.srv
   srv/SendBytes.srv
   srv/TestArrayRequest.srv
@@ -30,6 +31,13 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   srv/TestRequestAndResponse.srv
   srv/TestRequestOnly.srv
   srv/TestResponseOnly.srv
+  action/TestEmpty.action
+  action/TestFeedbackAndResult.action
+  action/TestGoalAndResult.action
+  action/TestGoalFeedbackAndResult.action
+  action/TestGoalOnly.action
+  action/TestMultipleGoalFields.action
+  action/TestResultOnly.action
   DEPENDENCIES builtin_interfaces geometry_msgs std_msgs
 )
 

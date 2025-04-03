@@ -32,6 +32,7 @@
 
 import struct
 import time
+from typing import Any
 
 from rosbridge_library.capabilities.fragmentation import Fragmentation
 from rosbridge_library.util import bson, json
@@ -82,7 +83,9 @@ class Protocol:
     # !! this might be related to (or even be avoided by using) throttle_rate !!
     delay_between_messages = 0
     # global list of non-ros advertised services
-    external_service_list = {}
+    external_service_list: dict[str, Any] = {}
+    # global list of non-ros advertised actions
+    external_action_list: dict[str, Any] = {}
     # Use only BSON for the whole communication if the server has been started with bson_only_mode:=True
     bson_only_mode = False
 
@@ -341,7 +344,6 @@ class Protocol:
             return None
 
     def deserialize(self, msg, cid=None):
-
         """Turns the wire-level representation into a dictionary of values
 
         Default behaviour assumes JSON. Override to use a different container.

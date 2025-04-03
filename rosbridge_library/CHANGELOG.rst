@@ -2,6 +2,46 @@
 Changelog for package rosbridge_library
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+2.2.0 (2025-02-26)
+------------------
+* Default subscriber QOS to BestEffort, account for TRANSIENT_LOCAL (`#991 <https://github.com/RobotWebTools/rosbridge_suite/issues/991>`_)
+* Fix action cancelling/aborting (`#1013 <https://github.com/RobotWebTools/rosbridge_suite/issues/1013>`_)
+* Fix randomly failing subscribe unsubscribe test (`#1008 <https://github.com/RobotWebTools/rosbridge_suite/issues/1008>`_)
+* Update maintainers (`#1000 <https://github.com/RobotWebTools/rosbridge_suite/issues/1000>`_)
+* Add timeout option to call_service messages (`#984 <https://github.com/RobotWebTools/rosbridge_suite/issues/984>`_)
+* Fix infinite loop in QueueMessageHandler (`#983 <https://github.com/RobotWebTools/rosbridge_suite/issues/983>`_)
+* Use monotonic clock for time measuring (`#982 <https://github.com/RobotWebTools/rosbridge_suite/issues/982>`_)
+* Add ament_mypy test and fix all mypy errors (`#980 <https://github.com/RobotWebTools/rosbridge_suite/issues/980>`_)
+* Drop support for ROS 2 Iron (`#981 <https://github.com/RobotWebTools/rosbridge_suite/issues/981>`_)
+* Remove first handler update as queue update is blocked (`#974 <https://github.com/RobotWebTools/rosbridge_suite/issues/974>`_)
+* Contributors: Błażej Sowa, Sebastian Castro, ewak, William Wedler, Mike Wake, Daisuke Sato, lboorman
+
+2.1.0 (2024-10-08)
+------------------
+
+2.0.0 (2024-10-08)
+------------------
+* Fix action cancellation by passing status from JSON (`#953 <https://github.com/RobotWebTools/rosbridge_suite/issues/953>`_)
+* Update pre-commit and fix issues (`#954 <https://github.com/RobotWebTools/rosbridge_suite/issues/954>`_)
+* Fix length-limited list types (`#840 <https://github.com/RobotWebTools/rosbridge_suite/issues/840>`_)
+* fix: update new subs with dds from publisher (`#940 <https://github.com/RobotWebTools/rosbridge_suite/issues/940>`_)
+* Avoid stale subscription when unsubscribing during resubscription (`#948 <https://github.com/RobotWebTools/rosbridge_suite/issues/948>`_)
+* Changed type hints in ros_loader.py to use imports from Typing (`#938 <https://github.com/RobotWebTools/rosbridge_suite/issues/938>`_)
+* Avoid stack traces when aborting an advertised action goal (`#906 <https://github.com/RobotWebTools/rosbridge_suite/issues/906>`_)
+* Timeout if service server not available within server_timeout_time (`#905 <https://github.com/RobotWebTools/rosbridge_suite/issues/905>`_)
+* Use ROS 2 Node Clock in Message Conversion (`#900 <https://github.com/RobotWebTools/rosbridge_suite/issues/900>`_)
+* Fix issues when canceling and unadvertising actions (`#896 <https://github.com/RobotWebTools/rosbridge_suite/issues/896>`_)
+* Support actions in rosbridge protocol (`#886 <https://github.com/RobotWebTools/rosbridge_suite/issues/886>`_)
+* Port unit tests to ROS 2 + Fix CBOR conversion and PNG compression (`#882 <https://github.com/RobotWebTools/rosbridge_suite/issues/882>`_)
+* Contributors: Brad Martin, Dimitri Nikitopoulos, EricGallimore, Ezra Brooks, Paul Gesel, Sebastian Castro, michael-cmt
+
+1.3.2 (2023-09-27)
+------------------
+* Interpret call_services_in_new_thread as boolean (`#857 <https://github.com/RobotWebTools/rosbridge_suite/issues/857>`_)
+* Add option to call services in a separate thread (`#847 <https://github.com/RobotWebTools/rosbridge_suite/issues/847>`_)
+* fix memory leak on service call (`#774 <https://github.com/RobotWebTools/rosbridge_suite/issues/774>`_)
+* Contributors: Sebastian Castro, hiroyuki obinata, rwhitney456
+
 1.3.1 (2022-10-21)
 ------------------
 * Optimized large binary array publishing (`#819 <https://github.com/RobotWebTools/rosbridge_suite/issues/819>`_)

@@ -2,6 +2,22 @@
 Changelog for package rosapi_msgs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+2.2.0 (2025-02-26)
+------------------
+* New async rosapi params module implementation (`#1001 <https://github.com/RobotWebTools/rosbridge_suite/issues/1001>`_)
+* Update maintainers (`#1000 <https://github.com/RobotWebTools/rosbridge_suite/issues/1000>`_)
+* Add new service to retrieve the different interfaces in the ROS Network (`#988 <https://github.com/RobotWebTools/rosbridge_suite/issues/988>`_)
+* Contributors: Błażej Sowa, Lebecque Florian
+
+2.1.0 (2024-10-08)
+------------------
+
+2.0.0 (2024-10-08)
+------------------
+
+1.3.2 (2023-09-27)
+------------------
+
 1.3.1 (2022-10-21)
 ------------------
 

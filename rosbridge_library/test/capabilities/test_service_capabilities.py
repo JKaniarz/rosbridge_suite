@@ -1,23 +1,32 @@
 #!/usr/bin/env python
+import time
 import unittest
 from json import dumps, loads
+from threading import Thread
 
-import rospy
-import rostest
+import rclpy
+from rclpy.node import Node
 from rosbridge_library.capabilities.advertise_service import AdvertiseService
 from rosbridge_library.capabilities.call_service import CallService
 from rosbridge_library.capabilities.service_response import ServiceResponse
 from rosbridge_library.capabilities.unadvertise_service import UnadvertiseService
-from rosbridge_library.protocol import (
+from rosbridge_library.internal.exceptions import (
     InvalidArgumentException,
     MissingArgumentException,
-    Protocol,
 )
+from rosbridge_library.protocol import Protocol
 
 
 class TestServiceCapabilities(unittest.TestCase):
     def setUp(self):
-        self.proto = Protocol(self._testMethodName)
+        rclpy.init()
+        self.node = Node("test_service_capabilities")
+
+        self.node.declare_parameter("call_services_in_new_thread", False)
+        self.node.declare_parameter("default_call_service_timeout", 5.0)
+        self.node.declare_parameter("send_action_goals_in_new_thread", False)
+
+        self.proto = Protocol(self._testMethodName, self.node)
         # change the log function so we can verify errors are logged
         self.proto.log = self.mock_log
         # change the send callback so we can access the rosbridge messages
@@ -26,8 +35,13 @@ class TestServiceCapabilities(unittest.TestCase):
         self.advertise = AdvertiseService(self.proto)
         self.unadvertise = UnadvertiseService(self.proto)
         self.response = ServiceResponse(self.proto)
+        self.call_service = CallService(self.proto)
         self.received_message = None
         self.log_entries = []
+
+    def tearDown(self):
+        self.node.destroy_node()
+        rclpy.shutdown()
 
     def local_send_cb(self, msg):
         self.received_message = msg
@@ -71,11 +85,8 @@ class TestServiceCapabilities(unittest.TestCase):
         )
         self.advertise.advertise_service(advertise_msg)
 
-        # This throws an exception if the timeout is exceeded (i.e. the service
-        # is not properly advertised)
-        rospy.wait_for_service(service_path, 1.0)
-
     def test_call_advertised_service(self):
+        # Advertise the service
         service_path = "/set_bool_2"
         advertise_msg = loads(
             dumps(
@@ -86,36 +97,32 @@ class TestServiceCapabilities(unittest.TestCase):
                 }
             )
         )
+        self.received_message = None
         self.advertise.advertise_service(advertise_msg)
 
-        # Call the service via rosbridge because rospy.ServiceProxy.call() is
-        # blocking
-        call_service = CallService(self.proto)
-        call_service.call_service(
-            loads(
-                dumps(
-                    {
-                        "op": "call_service",
-                        "id": "foo",
-                        "service": service_path,
-                        "args": [True],
-                    }
-                )
+        # Call the advertised service using rosbridge
+        self.received_message = None
+        call_msg = loads(
+            dumps(
+                {
+                    "op": "call_service",
+                    "id": "foo",
+                    "service": service_path,
+                    "args": {"data": True},
+                }
             )
         )
+        Thread(target=self.call_service.call_service, args=(call_msg,)).start()
 
-        loop_iterations = 0
+        start_time = time.monotonic()
         while self.received_message is None:
-            rospy.sleep(rospy.Duration(0.5))
-            loop_iterations += 1
-            if loop_iterations > 3:
-                self.fail(
-                    "did not receive service call rosbridge message " "after waiting 2 seconds"
-                )
+            rclpy.spin_once(self.node, timeout_sec=0.1)
+            if time.monotonic() - start_time > 0.3:
+                self.fail("Timed out waiting for service call message.")
 
         self.assertFalse(self.received_message is None)
         self.assertTrue("op" in self.received_message)
-        self.assertTrue(self.received_message["op"] == "call_service")
+        self.assertEqual(self.received_message["op"], "call_service")
         self.assertTrue("id" in self.received_message)
 
         # Now send the response
@@ -125,7 +132,7 @@ class TestServiceCapabilities(unittest.TestCase):
                     "op": "service_response",
                     "service": service_path,
                     "id": self.received_message["id"],
-                    "values": {"success": True, "message": ""},
+                    "values": {"success": True, "message": "set bool to true"},
                     "result": True,
                 }
             )
@@ -133,22 +140,18 @@ class TestServiceCapabilities(unittest.TestCase):
         self.received_message = None
         self.response.service_response(response_msg)
 
-        loop_iterations = 0
+        start_time = time.monotonic()
         while self.received_message is None:
-            rospy.sleep(rospy.Duration(0.5))
-            loop_iterations += 1
-            if loop_iterations > 3:
-                self.fail(
-                    "did not receive service response rosbridge message " "after waiting 2 seconds"
-                )
+            rclpy.spin_once(self.node, timeout_sec=0.1)
+            if time.monotonic() - start_time > 0.3:
+                self.fail("Timed out waiting for service response message.")
 
         self.assertFalse(self.received_message is None)
-        # Rosbridge should forward the response message to the "client"
-        # (i.e. our custom send function, see setUp())
         self.assertEqual(self.received_message["op"], "service_response")
         self.assertTrue(self.received_message["result"])
 
-    def test_unadvertise_with_live_request(self):
+    def test_call_advertised_service_with_timeout(self):
+        # Advertise the service
         service_path = "/set_bool_3"
         advertise_msg = loads(
             dumps(
@@ -159,61 +162,106 @@ class TestServiceCapabilities(unittest.TestCase):
                 }
             )
         )
+        self.received_message = None
         self.advertise.advertise_service(advertise_msg)
 
-        # Call the service via rosbridge because rospy.ServiceProxy.call() is
-        # blocking
-        call_service = CallService(self.proto)
-        call_service.call_service(
-            loads(
-                dumps(
-                    {
-                        "op": "call_service",
-                        "id": "foo",
-                        "service": service_path,
-                        "args": [True],
-                    }
-                )
+        # Call the advertised service using rosbridge
+        self.received_message = None
+        call_msg = loads(
+            dumps(
+                {
+                    "op": "call_service",
+                    "id": "foo",
+                    "service": service_path,
+                    "args": {"data": True},
+                    "timeout": 0.5,
+                }
             )
         )
+        Thread(target=self.call_service.call_service, args=(call_msg,)).start()
 
-        loop_iterations = 0
+        start_time = time.monotonic()
         while self.received_message is None:
-            rospy.sleep(rospy.Duration(0.5))
-            loop_iterations += 1
-            if loop_iterations > 3:
-                self.fail(
-                    "did not receive service call rosbridge message " "after waiting 2 seconds"
-                )
+            rclpy.spin_once(self.node, timeout_sec=0.1)
+            if time.monotonic() - start_time > 0.3:
+                self.fail("Timed out waiting for service call message.")
 
         self.assertFalse(self.received_message is None)
         self.assertTrue("op" in self.received_message)
-        self.assertTrue(self.received_message["op"] == "call_service")
+        self.assertEqual(self.received_message["op"], "call_service")
         self.assertTrue("id" in self.received_message)
 
-        # Now send the response
-        response_msg = loads(dumps({"op": "unadvertise_service", "service": service_path}))
         self.received_message = None
-        self.unadvertise.unadvertise_service(response_msg)
 
-        loop_iterations = 0
+        start_time = time.monotonic()
         while self.received_message is None:
-            rospy.sleep(rospy.Duration(0.5))
-            loop_iterations += 1
-            if loop_iterations > 3:
-                self.fail(
-                    "did not receive service response rosbridge message " "after waiting 2 seconds"
-                )
+            rclpy.spin_once(self.node, timeout_sec=0.1)
+            if time.monotonic() - start_time > 1.0:
+                self.fail("Timed out waiting for service response message.")
 
         self.assertFalse(self.received_message is None)
-        # Rosbridge should abort the existing service call with an error
-        # (i.e. "result" should be False)
         self.assertEqual(self.received_message["op"], "service_response")
         self.assertFalse(self.received_message["result"])
+        self.assertEqual(
+            self.received_message["values"], "Timeout exceeded while waiting for service response"
+        )
+
+    def test_unadvertise_with_live_request(self):
+        # Advertise the service
+        service_path = "/set_bool_3"
+        advertise_msg = loads(
+            dumps(
+                {
+                    "op": "advertise_service",
+                    "type": "std_srvs/SetBool",
+                    "service": service_path,
+                }
+            )
+        )
+        self.received_message = None
+        self.advertise.advertise_service(advertise_msg)
+
+        # Now send the response
+        call_msg = loads(
+            dumps(
+                {
+                    "op": "call_service",
+                    "id": "foo",
+                    "service": service_path,
+                    "args": {"data": True},
+                }
+            )
+        )
+        self.received_message = None
+        Thread(target=self.call_service.call_service, args=(call_msg,)).start()
+
+        start_time = time.monotonic()
+        while self.received_message is None:
+            rclpy.spin_once(self.node, timeout_sec=0.1)
+            if time.monotonic() - start_time > 0.3:
+                self.fail("Timed out waiting for service call message.")
+
+        self.assertFalse(self.received_message is None)
+        self.assertTrue("op" in self.received_message)
+        self.assertEqual(self.received_message["op"], "call_service")
+        self.assertTrue("id" in self.received_message)
+
+        # Now unadvertise the service
+        # TODO: This raises an exception, likely because of the following rclpy issue:
+        # https://github.com/ros2/rclpy/issues/1098
+        unadvertise_msg = loads(dumps({"op": "unadvertise_service", "service": service_path}))
+        self.received_message = None
+        self.unadvertise.unadvertise_service(unadvertise_msg)
+
+        with self.assertRaises(RuntimeError) as context:
+            start_time = time.monotonic()
+            while self.received_message is None:
+                rclpy.spin_once(self.node, timeout_sec=0.1)
+                if time.monotonic() - start_time > 0.3:
+                    self.fail("Timed out waiting for unadvertise service message.")
+
+            self.assertTrue(f"Service {service_path} was unadvertised" in context.exception)
 
 
-PKG = "rosbridge_library"
-NAME = "test_service_capabilities"
 if __name__ == "__main__":
-    rospy.init_node(NAME)
-    rostest.rosrun(PKG, NAME, TestServiceCapabilities)
+    unittest.main()

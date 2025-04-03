@@ -90,7 +90,8 @@ ros_primitive_types = [
 ]
 ros_header_types = ["Header", "std_msgs/Header", "roslib/Header"]
 ros_binary_types = ["uint8[]", "char[]", "sequence<uint8>", "sequence<char>"]
-list_tokens = re.compile("<(.+?)>")
+# Remove the list type wrapper, and length specifier, from rostypes i.e. sequence<double, 3>
+list_tokens = re.compile(r"<(.+?)(, \d+)?>")
 bounded_array_tokens = re.compile(r"(.+)\[.*\]")
 ros_binary_types_list_braces = [
     ("uint8[]", re.compile(r"uint8\[[^\]]*\]")),
@@ -169,12 +170,12 @@ def extract_values(inst):
     return _from_inst(inst, rostype)
 
 
-def populate_instance(msg, inst):
+def populate_instance(msg, inst, clock=ROSClock()):
     """Returns an instance of the provided class, with its fields populated
     according to the values in msg"""
     inst_type = msg_instance_type_repr(inst)
 
-    return _to_inst(msg, inst_type, inst_type, inst)
+    return _to_inst(msg, inst_type, inst_type, clock, inst)
 
 
 def msg_instance_type_repr(msg_inst):
@@ -269,7 +270,7 @@ def _from_object_inst(inst, rostype):
     return msg
 
 
-def _to_inst(msg, rostype, roottype, inst=None, stack=[]):
+def _to_inst(msg, rostype, roottype, clock=ROSClock(), inst=None, stack=[]):
     # Check if it's uint8[], and if it's a string, try to b64decode
     for binary_type, expression in ros_binary_types_list_braces:
         if expression.sub(binary_type, rostype) in ros_binary_types:
@@ -277,7 +278,7 @@ def _to_inst(msg, rostype, roottype, inst=None, stack=[]):
 
     # Check the type for time or rostime
     if rostype in ros_time_types:
-        return _to_time_inst(msg, rostype, inst)
+        return _to_time_inst(msg, rostype, clock, inst)
 
     # Check to see whether this is a primitive type
     if rostype in ros_primitive_types:
@@ -285,13 +286,13 @@ def _to_inst(msg, rostype, roottype, inst=None, stack=[]):
 
     # Check whether we're dealing with a list type
     if inst is not None and type(inst) in list_types:
-        return _to_list_inst(msg, rostype, roottype, inst, stack)
+        return _to_list_inst(msg, rostype, roottype, clock, inst, stack)
 
     # Otherwise, the type has to be a full ros msg type, so msg must be a dict
     if inst is None:
         inst = ros_loader.get_message_instance(rostype)
 
-    return _to_object_inst(msg, rostype, roottype, inst, stack)
+    return _to_object_inst(msg, rostype, roottype, clock, inst, stack)
 
 
 def _to_binary_inst(msg):
@@ -307,11 +308,11 @@ def _to_binary_inst(msg):
     return bytes(bytearray(msg))
 
 
-def _to_time_inst(msg, rostype, inst=None):
+def _to_time_inst(msg, rostype, clock, inst=None):
     # Create an instance if we haven't been provided with one
 
     if rostype == "builtin_interfaces/Time" and msg == "now":
-        return ROSClock().now().to_msg()
+        return clock.now().to_msg()
 
     if inst is None:
         if rostype == "builtin_interfaces/Time":
@@ -353,7 +354,7 @@ def _to_primitive_inst(msg, rostype, roottype, stack):
     raise FieldTypeMismatchException(roottype, stack, rostype, msgtype)
 
 
-def _to_list_inst(msg, rostype, roottype, inst, stack):
+def _to_list_inst(msg, rostype, roottype, clock, inst, stack):
     # Typecheck the msg
     if type(msg) not in list_types:
         raise FieldTypeMismatchException(roottype, stack, rostype, type(msg))
@@ -378,10 +379,10 @@ def _to_list_inst(msg, rostype, roottype, inst, stack):
         rostype = re.search(bounded_array_tokens, rostype).group(1)
 
     # Call to _to_inst for every element of the list
-    return [_to_inst(x, rostype, roottype, None, stack) for x in msg]
+    return [_to_inst(x, rostype, roottype, clock, None, stack) for x in msg]
 
 
-def _to_object_inst(msg, rostype, roottype, inst, stack):
+def _to_object_inst(msg, rostype, roottype, clock, inst, stack):
 
     # Typecheck the msg
     if not isinstance(msg, dict):
@@ -389,10 +390,9 @@ def _to_object_inst(msg, rostype, roottype, inst, stack):
 
     # Substitute the correct time if we're an std_msgs/Header
     if rostype in ros_header_types:
-        inst.stamp = ROSClock().now().to_msg()
+        inst.stamp = clock.now().to_msg()
 
     inst_fields = inst.get_fields_and_field_types()
-
     for field_name in msg:
         # Add this field to the field stack
         field_stack = stack + [field_name]
@@ -404,7 +404,9 @@ def _to_object_inst(msg, rostype, roottype, inst, stack):
         field_rostype = inst_fields[field_name]
         field_inst = getattr(inst, field_name)
 
-        field_value = _to_inst(msg[field_name], field_rostype, roottype, field_inst, field_stack)
+        field_value = _to_inst(
+            msg[field_name], field_rostype, roottype, clock, field_inst, field_stack
+        )
 
         setattr(inst, field_name, field_value)
 

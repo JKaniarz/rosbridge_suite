@@ -175,7 +175,15 @@ class RosbridgeWebsocketNode(Node):
         RosbridgeWebSocket.use_compression = self.declare_parameter("use_compression", False).value
 
         RosbridgeWebSocket.call_services_in_new_thread = self.declare_parameter(
-            "call_services_in_new_thread", False
+            "call_services_in_new_thread", True
+        ).value
+
+        RosbridgeWebSocket.default_call_service_timeout = self.declare_parameter(
+            "default_call_service_timeout", 5.0
+        ).value
+
+        RosbridgeWebSocket.send_action_goals_in_new_thread = self.declare_parameter(
+            "send_action_goals_in_new_thread", True
         ).value
 
         # get RosbridgeProtocol parameters
@@ -333,7 +341,13 @@ def main(args=None):
 
     executor = rclpy.executors.SingleThreadedExecutor()
     executor.add_node(node)
-    spin_callback = PeriodicCallback(lambda: executor.spin_once(timeout_sec=0.01), 1)
+
+    def spin_ros():
+        executor.spin_once(timeout_sec=0.01)
+        if not rclpy.ok():
+            shutdown_hook()
+
+    spin_callback = PeriodicCallback(spin_ros, 1)
     spin_callback.start()
     try:
         start_hook()

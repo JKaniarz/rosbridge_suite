@@ -49,13 +49,21 @@ class CallService(Capability):
     services_glob = None
 
     def __init__(self, protocol):
-        # Call superclas constructor
+        # Call superclass constructor
         Capability.__init__(self, protocol)
 
+        self.default_timeout = (
+            protocol.node_handle.get_parameter("default_call_service_timeout")
+            .get_parameter_value()
+            .double_value
+        )
+
         # Register the operations that this capability provides
-        call_services_in_new_thread = protocol.node_handle.get_parameter(
-            "call_services_in_new_thread"
-        ).get_parameter_value()
+        call_services_in_new_thread = (
+            protocol.node_handle.get_parameter("call_services_in_new_thread")
+            .get_parameter_value()
+            .bool_value
+        )
         if call_services_in_new_thread:
             # Calls the service in a separate thread so multiple services can be processed simultaneously.
             protocol.node_handle.get_logger().info("Calling services in new thread")
@@ -79,6 +87,7 @@ class CallService(Capability):
         fragment_size = message.get("fragment_size", None)
         compression = message.get("compression", "none")
         args = message.get("args", [])
+        timeout = message.get("timeout", self.default_timeout)
 
         if CallService.services_glob is not None and CallService.services_glob:
             self.protocol.log(
@@ -110,7 +119,14 @@ class CallService(Capability):
         e_cb = partial(self._failure, cid, service)
 
         # Run service caller in the same thread.
-        ServiceCaller(trim_servicename(service), args, s_cb, e_cb, self.protocol.node_handle).run()
+        ServiceCaller(
+            trim_servicename(service),
+            args,
+            timeout,
+            s_cb,
+            e_cb,
+            self.protocol.node_handle,
+        ).run()
 
     def _success(self, cid, service, fragment_size, compression, message):
         outgoing_message = {

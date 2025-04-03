@@ -155,7 +155,7 @@ class MultiPublisher:
         inst = self.msg_class()
 
         # Populate the instance, propagating any exceptions that may be thrown
-        message_conversion.populate_instance(msg, inst)
+        message_conversion.populate_instance(msg, inst, self.node_handle.get_clock())
 
         # Publish the message
         self.publisher.publish(inst)
@@ -213,7 +213,7 @@ class PublisherManager:
         node_handle -- Handle to a rclpy node to create the publisher.
         msg_type   -- (optional) the type to publish
         latch      -- (optional) whether to make this publisher latched
-        queue_size -- (optional) rospy publisher queue_size to use
+        queue_size -- (optional) publisher queue_size to use
 
         Throws:
         Exception -- exceptions are propagated from the MultiPublisher if
@@ -303,7 +303,7 @@ class PublisherManager:
         msg       -- a JSON-like dict of fields and values
         node_handle -- Handle to a rclpy node to create the publisher.
         latch     -- (optional) whether to make this publisher latched
-        queue_size -- (optional) rospy publisher queue_size to use
+        queue_size -- (optional) publisher queue_size to use
 
         Throws:
         Exception -- a variety of exceptions are propagated.  They can be
