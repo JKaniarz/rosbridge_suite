@@ -91,7 +91,7 @@ class IncomingQueue(threading.Thread):
     def __init__(self, protocol: RosbridgeProtocol) -> None:
         threading.Thread.__init__(self)
         self.daemon = True
-        self.queue: deque[str] = deque()
+        self.queue: deque[str | bytes] = deque()
         self.protocol = protocol
 
         self.cond = threading.Condition()
@@ -105,7 +105,7 @@ class IncomingQueue(threading.Thread):
                 self.queue.popleft()
             self.cond.notify()
 
-    def push(self, msg: str) -> None:
+    def push(self, msg: str | bytes) -> None:
         with self.cond:
             self.queue.append(msg)
             self.cond.notify()
@@ -179,8 +179,6 @@ class RosbridgeWebSocket(WebSocketHandler):
 
     @log_exceptions
     def on_message(self, message: str | bytes) -> None:
-        if isinstance(message, bytes):
-            message = message.decode("utf-8")
         self.incoming_queue.push(message)
 
     @log_exceptions

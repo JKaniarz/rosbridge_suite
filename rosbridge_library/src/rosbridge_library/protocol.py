@@ -32,6 +32,7 @@
 
 from __future__ import annotations
 
+import struct
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -86,8 +87,9 @@ class Protocol:
     fragment_size = None
     png = None
     # buffer used to gather partial JSON-objects (could be caused by small tcp-buffers or similar..)
-    buffer = ""
-    old_buffer = ""
+    buffer: str = ""
+    old_buffer: str = ""
+    bson_buffer: bytes = bytes()
     busy = False
 
     # tracks topics advertised by the client
@@ -140,35 +142,75 @@ class Protocol:
 
     # added default message_string="" to allow recalling incoming until buffer is empty without giving a parameter
     # --> allows to get rid of (..or minimize) delay between client-side sends
-    def incoming(self, message_string: str = "") -> None:
+    def incoming(self, message: str | bytes | None = None) -> None:
         """
         Process an incoming message from the client.
 
-        :param message_string: The wire-level message sent by the client
+        :param message: The wire-level message sent by the client
         """
-        if len(self.buffer) > 0:
-            self.buffer = self.buffer + message_string
-        else:
-            self.buffer = message_string
         msg = None
 
-        # take care of having multiple JSON-objects in receiving buffer
-        # ..first, try to load the whole buffer as a JSON-object
-        try:
-            msg = self.deserialize(self.buffer)
-            self.buffer = ""
+        if self.bson_only_mode:
+            # Error in handler. Only bytes allowed in bson_only_mode
+            if isinstance(message, str):
+                raise Exception()
 
-        # if loading the whole object fails, try to load a part of it
-        # (from first opening bracket "{" to next closing bracket "}")
-        # .. this causes Exceptions on "inner" closing brackets --> so I suppressed logging of deserialization errors
-        except Exception:
-            if self.bson_only_mode:
+            # handle None
+            if message is None:
+                message = bytes()
+
+            # add message to bson_buffer.
+            if len(self.bson_buffer) > 0:
+                self.bson_buffer = self.bson_buffer + message
+            else:
+                self.bson_buffer = message
+          
+            # see if we have a whole BSON message
+            if len(self.bson_buffer) >= 4:
+                bson_len = struct.unpack_from("i", self.bson_buffer)[0]
+                if len(self.bson_buffer) < bson_len:
+                    return
+            else:
+                return
+
+            if len(self.bson_buffer) > bson_len:
+                message_bson = self.bson_buffer[:bson_len]
+                self.bson_buffer = self.bson_buffer[bson_len:]
+            else:
+                message_bson = self.bson_buffer
+                self.bson_buffer = bytes()
+
+            try:
+                msg = self.deserialize(message_bson)
+            except Exception:
                 # Since BSON should be used in conjunction with a network handler that receives exactly one full BSON
                 # message. This will then be passed to self.deserialize and shouldn't cause any exceptions because of
                 # fragmented messages (broken or invalid messages might still be sent tough)
                 self.log("error", "Exception in deserialization of BSON")
 
+        else:
+            if isinstance(message, bytes):
+                message_string = message.decode("utf-8")
+            elif isinstance(message, str):
+                message_string = message
             else:
+                message_string = ""
+
+            # add message to buffer
+            if len(self.buffer) > 0:
+                self.buffer = self.buffer + message_string
+            else:
+                self.buffer = message_string
+
+            # take care of having multiple JSON-objects in receiving buffer
+            # ..first, try to load the whole buffer as a JSON-object
+            try:
+                msg = self.deserialize(self.buffer)
+                self.buffer = ""
+
+            # if loading whole object fails try to load part of it (from first opening bracket "{" to next closing bracket "}"
+            # .. this causes Exceptions on "inner" closing brackets --> so I suppressed logging of deserialization errors
+            except Exception:                
                 # TODO: handling of partial/multiple/broken json data in incoming buffer
                 # This way is problematic when json contains nested json-objects
                 # ( e.g. { ... { "config": [0,1,2,3] } ...  } )

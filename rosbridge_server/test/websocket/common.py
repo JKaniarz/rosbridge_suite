@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import bson
 import functools
 import json
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -41,6 +42,12 @@ class TestClientProtocol(WebSocketClientProtocol):
         for _ in range(times):
             print(f"WebSocket client sent message: {msg!r}")
             reactor.callFromThread(self.sendMessage, msg)  # type: ignore[attr-defined]
+
+    def sendBson(self, msg_dict: dict[str, Any], *, times: int = 1) -> None:  # noqa: N802
+        msg = bson.encode(msg_dict)
+        for _ in range(times):
+            print(f"WebSocket client sent message: {msg!r}")
+            reactor.callFromThread(self.sendMessage, msg, True)  # type: ignore[attr-defined]
 
     def onMessage(self, payload: str, binary: bool) -> None:  # noqa: N802
         print(f"WebSocket client received message: {payload}")
